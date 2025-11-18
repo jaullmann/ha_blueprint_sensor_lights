@@ -1,89 +1,84 @@
 blueprint:
-  name: "Smart Presence Lights with State Memory and Schedule"
-  description: >
-    Liga luzes com sensor de presença, lux opcional, timer auto-off,
-    memorização do último estado individual dos botões
-    e funcionamento restrito a horários e dias especificados.
+  name: Sensor Light Basic
+  description: Liga luzes com sensor de presença, condicionado a limite de luminosidade opcional, faixa de horários dias opcionais.
   domain: automation
-
   input:
     presence_sensor:
-      name: Sensor de presença
+      name: Sensor de Presença
       selector:
         entity:
           domain:
             - binary_sensor
 
+    target_lights:
+      name: Switches a serem ligados
+      selector:
+        target:
+          entity:
+            domain: switch
+
+    countdown_time:
+      name: Tempo para desligar (segundos)
+      default: 60
+      selector:
+        number:
+          min: 1
+          max: 36000
+          mode: slider
+
+    only_if_dark:
+      name: Habilitar conforme limite de luminosidade?
+      default: false
+      selector:
+        boolean: {}
+
     lux_sensor:
-      name: Sensor de Luminosidade (opcional)
+      name: Sensor de luminosidade (opcional)
       default: ""
       selector:
         entity:
           domain: sensor
           device_class: illuminance
+      enabled: "{% if only_if_dark %}true{% else %}false{% endif %}"
 
-    lux_threshold:
-      name: LUX mínimo para considerar ambiente escuro
-      default: 20
+    lux_limit:
+      name: Limite máximo de lux para ativação (opcional)
+      default: 10
       selector:
         number:
           min: 0
-          max: 300
-          unit_of_measurement: lx
-          mode: box
-
-    light_switches:
-      name: Interruptores controlados
-      selector:
-        entity:
-          domain: switch
-          multiple: true
-
-    state_booleans:
-      name: Booleanos que armazenam estado (mesma ordem dos switches)
-      selector:
-        entity:
-          domain: input_boolean
-          multiple: true
-
-    countdown_time:
-      name: Tempo de desligamento automático (segundos)
-      default: 60
-      selector:
-        number:
-          min: 5
-          max: 3600
-          step: 5
-          unit_of_measurement: s
+          max: 2000
+      enabled: "{% if only_if_dark %}true{% else %}false{% endif %}"
 
     start_time:
-      name: Hora inicial de funcionamento
-      default: null
+      name: Hora inicial (opcional)
+      description: Se vazio, funciona o dia todo.
+      default: ""
       selector:
         time: {}
 
     end_time:
-      name: Hora final de funcionamento
-      default: null
+      name: Hora final (opcional)
+      description: Se vazio, funciona o dia todo.
+      default: ""
       selector:
         time: {}
 
-    weekdays:
-      name: Dias permitidos para atuar
-      description: se nenhum dia for selecionado, funcionará todos os dias
+    allowed_days:
+      name: Dias permitidos (opcional)
+      description: Se nenhuma opção for marcada, funcionará todos os dias.
       default: []
       selector:
         select:
-          multiple: true
-          mode: list
           options:
-            - Mon
-            - Tue
-            - Wed
-            - Thu
-            - Fri
-            - Sat
-            - Sun
+            - Monday
+            - Tuesday
+            - Wednesday
+            - Thursday
+            - Friday
+            - Saturday
+            - Sunday
+          multiple: true
 
 mode: restart
 
@@ -92,101 +87,64 @@ trigger:
     entity_id: !input presence_sensor
     to: "on"
 
-  - platform: event
-    event_type: timer.finished
-    event_data:
-      entity_id: timer.smart_light_timer
+  - platform: state
+    entity_id: !input presence_sensor
+    to: "off"
+    for:
+      seconds: !input countdown_time
 
-variables:
-  switches: !input light_switches
-  booleans: !input state_booleans
-  lux_entity: !input lux_sensor
-  lux_min: !input lux_threshold
-  time_sec: !input countdown_time
-  start_time: !input start_time
-  end_time: !input end_time
-  weekdays: !input weekdays
+condition: []
 
 action:
-
-  #################################################################
-  ## GLOBAL CONDITION → HORÁRIO PERMITIDO
-  #################################################################
-  - condition: template
-    alias: "Checar faixa de horário"
-    value_template: >
-      {% set now_time = now().time() %}
-      {% set start = strptime(start_time, '%H:%M:%S').time() %}
-      {% set end = strptime(end_time, '%H:%M:%S').time() %}
-      {% if start < end %}
-        {{ start <= now_time <= end }}
-      {% else %}
-        {{ now_time >= start or now_time <= end }}
-      {% endif %}
-
-  #################################################################
-  ## GLOBAL CONDITION → DIA DA SEMANA
-  #################################################################
-  - condition: template
-    alias: "Checar dia permitido"
-    value_template: >
-      {{ now().strftime('%a') in weekdays }}
-
-  #################################################################
-  ## HANDLE TRIGGERS
-  #################################################################
   - choose:
-
-      ###############################################################
-      ## PRESENCE TRIGGER
-      ###############################################################
+      # ---------------------------
+      # SENSOR LIGOU
+      # ---------------------------
       - conditions:
-          - condition: trigger
-            id: presence_trigger
+          - condition: state
+            entity_id: !input presence_sensor
+            state: "on"
+
+          # Dias da semana (opcional)
+          - condition: template
+            value_template: >
+              {% set days = iinput.allowed_days %}
+              {% if days == [] %}
+                true
+              {% else %}
+                {{ now().strftime('%A') in days }}
+              {% endif %}
+
+          # Verificação de horário (opcional)
+          - condition: template
+            value_template: >
+              {% set start = iinput.start_time %}
+              {% set end = iinput.end_time %}
+              {% if start == "" or end == "" %}
+                true
+              {% else %}
+                {{ start < now().strftime('%H:%M:%S') < end }}
+              {% endif %}
+
+          # Verificação de lux (opcional)
+          - condition: template
+            value_template: >
+              {% if iinput.only_if_dark == false %}
+                true
+              {% else %}
+                {% if iinput.lux_sensor == "" %}
+                  true
+                {% else %}
+                  {{ states(iinput.lux_sensor) | float(0) <= (iinput.lux_limit | float) }}
+                {% endif %}
+              {% endif %}
         sequence:
-          ## If lux sensor exists, check threshold
-          - condition: or
-            conditions:
-              - condition: template
-                value_template: "{{ lux_entity == '' }}"
-              - condition: numeric_state
-                entity_id: "{{ lux_entity }}"
-                below: "{{ lux_min }}"
+          - service: switch.turn_on
+            target: !input target_lights
 
-          ## RESTORE SAVED STATES
-          - repeat:
-              count: "{{ switches | count }}"
-              sequence:
-                - service: >
-                    switch.turn_{{ 'on' if states[booleans[repeat.index-1]] == 'on' else 'off' }}
-                  target:
-                    entity_id: "{{ switches[repeat.index-1] }}"
-
-          ## RESTART TIMER
-          - service: timer.start
-            target:
-              entity_id: timer.smart_light_timer
-            data:
-              duration: "{{ time_sec }}"
-
-      ###############################################################
-      ## TIMER FINISHED TRIGGER
-      ###############################################################
-      - conditions:
-          - condition: trigger
-            id: timer_finished
-        sequence:
-
-          ## SAVE CURRENT STATES BEFORE TURNING OFF
-          - repeat:
-              count: "{{ switches | count }}"
-              sequence:
-                - service: >
-                    input_boolean.turn_{{ 'on' if states[switches[repeat.index-1]] == 'on' else 'off' }}
-                  target:
-                    entity_id: "{{ booleans[repeat.index-1] }}"
-
-          ## TURN ALL SWITCHES OFF
-          - service: switch.turn_off
-            target:
-              entity_id: "{{ switches }}"
+    # ---------------------------
+    # SENSOR DESLIGOU
+    # ---------------------------
+    default:
+      - service: switch.turn_off
+        target: !input target_lights
