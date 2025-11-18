@@ -1,141 +1,166 @@
 blueprint:
-  name: Sensor Light Basic Debug
-  description: Versão debug para identificar problemas de ativação
+  name: "Presença Estática (mmWave) com Timer para Iluminação"
+  description: "Acende luzes ao detectar presença e mantém acesas, reiniciando um timer de desligamento a cada nova detecção, ignorando o estado 'clear' imediato do sensor."
   domain: automation
+  source_url: https://github.com/seu-usuario/homeassistant-blueprints # Troque pelo seu repositório, se for publicar.
   input:
-    presence_sensor:
-      name: Sensor de Presença
+    # 1. SENSOR DE PRESENÇA (OBRIGATÓRIO)
+    mmwave_sensor:
+      name: "Sensor(es) de Presença (mmWave)"
+      description: "Entidade ou grupo de sensor(es) de presença (ex: binary_sensor.sensor_mmwave_occupancy)."
       selector:
         entity:
-          domain:
-            - binary_sensor
+          domain: binary_sensor
+          device_class: presence
+          multiple: true
 
-    target_lights:
-      name: Switches a serem acionados
+    # 2. ILUMINAÇÃO ALVO (OBRIGATÓRIO)
+    light_target:
+      name: "Iluminação Alvo"
+      description: "Entidade ou grupo de luzes/interruptores que serão controlados (ex: light.teto_sala, switch.interruptor_parede)."
       selector:
         target:
           entity:
-            domain: switch
-
-    countdown_time:
-      name: Tempo para desligar (segundos)
+            domain: [light, switch]
+      
+    # 3. TIMER DE DESLIGAMENTO (OPCIONAL/DEFAULT)
+    off_delay:
+      name: "Tempo de Espera (s)"
+      description: "Tempo (em segundos) que a luz permanecerá acesa após a última detecção de presença. (Default: 60s)"
       default: 60
       selector:
         number:
-          min: 1
+          min: 10
           max: 1800
-          step: 5
+          step: 10
+          unit_of_measurement: "s"
           mode: slider
 
-    only_if_dark:
-      name: Habilitar conforme limite de luminosidade?
-      default: false
+    # 4. CONDIÇÃO DE LUMINOSIDADE MÁXIMA (OPCIONAL)
+    max_lux_value:
+      name: "Luminosidade Máxima (Lux)"
+      description: "Se o valor de luminosidade do sensor for superior a este, a luz NÃO será acesa. Deixe vazio para ignorar esta condição."
+      default: 100
       selector:
-        boolean: {}
-
+        number:
+          min: 5
+          max: 300
+          step: 5
+          unit_of_measurement: "Lux"
+          mode: slider
+      
     lux_sensor:
-      name: Sensor de luminosidade (opcional)
+      name: "Sensor de Luminosidade"
+      description: "Entidade do sensor que fornece o valor atual de luminosidade (Lux)."
       default: ""
       selector:
         entity:
           domain: sensor
           device_class: illuminance
+          multiple: false
 
-    lux_limit:
-      name: Limite máximo de lux para ativação (opcional)
-      default: 10
+    # 5. CONDIÇÃO DE HORÁRIO ATIVO (OPCIONAL)
+    time_after:
+      name: "Horário de Início (Opcional)"
+      description: "A automação só funcionará APÓS este horário."
+      default: "00:00:00"
       selector:
-        number:
-          min: 0
-          max: 200
-          step: 5
-          mode: slider
-
-    start_time:
-      name: Hora inicial (opcional)
-      description: Se vazio, funciona o dia todo.
-      default: ""
+        time:
+    
+    time_before:
+      name: "Horário de Fim (Opcional)"
+      description: "A automação só funcionará ANTES deste horário."
+      default: "23:59:59"
       selector:
-        time: {}
+        time:
 
-    end_time:
-      name: Hora final (opcional)
-      description: Se vazio, funciona o dia todo.
-      default: ""
-      selector:
-        time: {}
-
-    allowed_days:
-      name: Dias permitidos (opcional)
-      description: Se nenhuma opção for marcada, funcionará todos os dias.
-      default: []
+    # 6. CONDIÇÃO DE DIAS DA SEMANA ATIVOS (OPCIONAL)
+    active_weekdays:
+      name: "Dias da Semana Ativos (Opcional)"
+      description: "Selecione os dias da semana em que a automação deve estar ativa (Deixe todos marcados para ativar 7 dias por semana)."
+      default: [mon, tue, wed, thu, fri, sat, sun]
       selector:
         select:
           options:
-            - seg
-            - ter
-            - qua
-            - qui
-            - sex
-            - sab
-            - dom
+            - label: "Segunda-feira"
+              value: mon
+            - label: "Terça-feira"
+              value: tue
+            - label: "Quarta-feira"
+              value: wed
+            - label: "Quinta-feira"
+              value: thu
+            - label: "Sexta-feira"
+              value: fri
+            - label: "Sábado"
+              value: sat
+            - label: "Domingo"
+              value: sun
           multiple: true
 
-mode: restart
+    # 7. CONDIÇÃO BOLEANA DE ATIVAÇÃO/DESATIVAÇÃO GERAL (OPCIONAL)
+    enable_switch:
+      name: "Chave Mestra de Ativação (Opcional)"
+      description: "Entidade booleana (ex: switch, input_boolean) que deve estar LIGADA para a automação funcionar. Deixe vazio para ignorar."
+      default: ""
+      selector:
+        entity:
+          domain: [input_boolean, switch]
+          multiple: false
 
+mode: restart # Garante que cada trigger de 'on' interrompa e reinicie o ciclo
+
+# --- TRIGGER: QUANDO O SENSOR DETECTA PRESENÇA ---
 trigger:
   - platform: state
-    entity_id: !input presence_sensor
+    entity_id: !input mmwave_sensor
+    from: "off"
     to: "on"
-  - platform: state
-    entity_id: !input presence_sensor
-    to: "off"
-    for:
-      seconds: !input countdown_time
 
+# --- CONDIÇÕES DE FUNCIONAMENTO GERAL ---
+condition:
+  # 1. CONDIÇÃO DE LUMINOSIDADE (SE O SENSOR FOR FORNECIDO)
+  - condition: template
+    value_template: >
+      {% if is_state('!input lux_sensor', 'unavailable') or is_state('!input lux_sensor', 'unknown') or !input lux_sensor %}
+        true # Se o sensor não for configurado ou estiver indisponível, a condição é verdadeira.
+      {% else %}
+        {{ states('!input lux_sensor') | float(0) <= (1 * !input max_lux_value) }}
+      {% endif %}
+
+  # 2. CONDIÇÃO DE HORÁRIO
+  - condition: time
+    after: !input time_after
+    before: !input time_before
+    
+  # 3. CONDIÇÃO DE DIAS DA SEMANA
+  - condition: time
+    weekday: !input active_weekdays
+
+  # 4. CONDIÇÃO DE CHAVE MESTRA (SE FOR FORNECIDA)
+  - condition: state
+    entity_id: !input enable_switch
+    state: "on"
+    alias: "Chave Mestra Ativada"
+
+# --- AÇÃO: LIGAR A LUZ E INICIAR/REINICIAR O TIMER ---
 action:
-  - choose:
-      - conditions:
-          - condition: state
-            entity_id: !input presence_sensor
-            state: "on"
-          - condition: template
-            value_template: >
-              {% set days = allowed_days %}
-              {{ (days == [] or days is none) or (now().strftime('%a').lower() in days) }}
-          - condition: template
-            value_template: >
-              {% set start = start_time %}
-              {% set end = end_time %}
-              {{ (start == "" or end == "") or (now().strftime("%H:%M:%S") >= start and now().strftime("%H:%M:%S") <= end) }}
-          - condition: template
-            value_template: >
-              {% if not only_if_dark %}
-                true
-              {% else %}
-                {% if lux_sensor == "" or not states(lux_sensor) %}
-                  true
-                {% else %}
-                  {{ states(lux_sensor) | float(0) <= (lux_limit | float) }}
-                {% endif %}
-              {% endif %}
+  # 1. LIGA A LUZ
+  - service: "light.turn_on"
+    target: !input light_target
+    alias: "Ligar a Luz"
 
-        sequence:
-          - service: switch.turn_on
-            target: !input target_lights
-          - service: persistent_notification.create
-            data:
-              title: "Sensor Light - LIGADO"
-              message: >
-                Sensor: {{ states(presence_sensor) }}
-                Horário: {{ now().strftime('%H:%M:%S') }}
-                Dia: {{ now().strftime('%a') }}
+  # 2. ESPERA O TEMPO DE DELAY (O TIMER É REINICIADO SE HOUVER NOVO TRIGGER)
+  - delay: !input off_delay
+    alias: "Aguardar Timer de Desligamento"
 
-    default:
-      - service: switch.turn_off
-        target: !input target_lights
-      - service: persistent_notification.create
-        data:
-          title: "Sensor Light - DESLIGADO"
-          message: >
-            Sensor desligou por {{ countdown_time }} segundos
+  # 3. VERIFICA NOVAMENTE O SENSOR ANTES DE DESLIGAR
+  - condition: state
+    entity_id: !input mmwave_sensor
+    state: "off"
+    alias: "Apenas desligar se a presença estiver 'off' APÓS o delay"
+
+  # 4. DESLIGA A LUZ
+  - service: "light.turn_off"
+    target: !input light_target
+    alias: "Desligar a Luz"
