@@ -23,10 +23,14 @@ blueprint:
             - switch
 
     countdown_time:
-      name: 'Tempo até desligar - ex: 60s, 3min, 15min'
-      default: "00:01:00"
+      name: Tempo em segundos para desligar
+      default: 60
       selector:
-        duration:
+        number:
+          min: 5
+          max: 3600
+          unit_of_measurement: seconds
+          
 
     only_if_dark:
       name: 'Opcional - Só ligar se estiver escuro'
@@ -85,7 +89,8 @@ action:
     target:
       entity_id: !input target_switch
 
-  - delay: "{{ input.countdown_time }}"
+  - delay: 
+    seconds: !input countdown_time
 
   - service: homeassistant.turn_off
     target:
