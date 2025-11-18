@@ -109,7 +109,7 @@ action:
           # Dias da semana (opcional)
           - condition: template
             value_template: >
-              {% set days = iinput.allowed_days %}
+              {% set days = !input.allowed_days %}
               {% if days == [] %}
                 true
               {% else %}
@@ -119,8 +119,8 @@ action:
           # Verificação de horário (opcional)
           - condition: template
             value_template: >
-              {% set start = iinput.start_time %}
-              {% set end = iinput.end_time %}
+              {% set start = !input.start_time %}
+              {% set end = !input.end_time %}
               {% if start == "" or end == "" %}
                 true
               {% else %}
@@ -130,13 +130,13 @@ action:
           # Verificação de lux (opcional)
           - condition: template
             value_template: >
-              {% if iinput.only_if_dark == false %}
+              {% if !input.only_if_dark == false %}
                 true
               {% else %}
-                {% if iinput.lux_sensor == "" %}
+                {% if !input.lux_sensor == "" %}
                   true
                 {% else %}
-                  {{ states(iinput.lux_sensor) | float(0) <= (iinput.lux_limit | float) }}
+                  {{ states(!input.lux_sensor) | float(0) <= (!input.lux_limit | float) }}
                 {% endif %}
               {% endif %}
         sequence:
