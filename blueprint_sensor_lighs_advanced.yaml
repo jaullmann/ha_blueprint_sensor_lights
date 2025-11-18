@@ -52,7 +52,7 @@ blueprint:
       selector:
         number:
           min: 5
-          max: 900
+          max: 3600
           step: 5
           unit_of_measurement: s
 
