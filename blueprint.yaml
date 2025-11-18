@@ -23,18 +23,18 @@ blueprint:
             - switch
 
     countdown_time:
-      name: Tempo até desligar (ex: 60s, 3min, 15min)
+      name: Tempo até desligar - ex: 60s, 3min, 15min
       selector:
         duration:
 
     only_if_dark:
-      name: (Opcional) Só ligar se estiver escuro
+      name: Opcional - Só ligar se estiver escuro
       default: false
       selector:
         boolean: {}
 
     lux_sensor:
-      name: (Opcional) Sensor de luminosidade
+      name: Opcional - Sensor de luminosidade
       default: null
       selector:
         entity:
