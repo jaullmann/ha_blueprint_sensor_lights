@@ -41,6 +41,17 @@ blueprint:
           domain: sensor
           device_class: illuminance
 
+    lux_threshold:
+      name: 'Limite máximo de luminosidade (lx)'
+      description: Se o sensor medir menos que esse valor, o ambiente será considerado escuro
+      default: 15
+      selector:
+        number:
+          min: 1
+          max: 200
+          unit_of_measurement: 1x
+          mode: slider
+
 mode: restart
 
 trigger:
@@ -61,8 +72,8 @@ condition: >
       false,
       (
         not (states[inputs.lux_sensor] is defined)
-        or (states[inputs.lux_sensor].state | float < 10)
-      )
+        or (states[inputs.lux_sensor].state | float < (inputs.lux_threshold | float))
+      ) == false
     )) }}
 
 action:
