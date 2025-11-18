@@ -1,0 +1,77 @@
+blueprint:
+  name: Luz com Timer baseado em presença ou acionamento manual
+  description: >
+    Liga a luz ao detectar presença ou acionamento manual e inicia um timer.
+    Reinicia o timer a cada presença ou acionamento manual.
+    Desliga automaticamente ao fim do tempo.
+  domain: automation
+
+  input:
+    presence_sensor:
+      name: Sensor de presença
+      selector:
+        entity:
+          domain:
+            - binary_sensor
+
+    target_switch:
+      name: Luz / Interruptor
+      selector:
+        entity:
+          domain:
+            - light
+            - switch
+
+    countdown_time:
+      name: Tempo até desligar (ex: 60s, 3min, 15min)
+      selector:
+        duration:
+
+    only_if_dark:
+      name: (Opcional) Só ligar se estiver escuro
+      default: false
+      selector:
+        boolean: {}
+
+    lux_sensor:
+      name: (Opcional) Sensor de luminosidade
+      default: null
+      selector:
+        entity:
+          domain: sensor
+          device_class: illuminance
+
+mode: restart
+
+trigger:
+  - id: presence
+    platform: state
+    entity_id: !input presence_sensor
+    to: "on"
+
+  - id: manual_on
+    platform: state
+    entity_id: !input target_switch
+    to: "on"
+
+condition: >
+  {{ not (trigger.id == 'presence'
+    and iif(
+      !input only_if_dark,
+      false,
+      (
+        not (states[inputs.lux_sensor] is defined)
+        or (states[inputs.lux_sensor].state | float < 10)
+      )
+    )) }}
+
+action:
+  - service: homeassistant.turn_on
+    target:
+      entity_id: !input target_switch
+
+  - delay: "{{ input.countdown_time }}"
+
+  - service: homeassistant.turn_off
+    target:
+      entity_id: !input target_switch
