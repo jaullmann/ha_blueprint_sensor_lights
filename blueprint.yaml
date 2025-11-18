@@ -66,15 +66,18 @@ trigger:
     to: "on"
 
 condition: >
-  {{ not (trigger.id == 'presence'
-    and iif(
-      !input only_if_dark,
-      false,
-      (
-        not (states[inputs.lux_sensor] is defined)
-        or (states[inputs.lux_sensor].state | float < (inputs.lux_threshold | float))
-      ) == false
-    )) }}
+  {{ not (
+    trigger.id == 'presence'
+    and (iif(
+          !input only_if_dark,
+          false,
+          (
+            not (states[inputs.lux_sensor] is defined)
+            or (states[inputs.lux_sensor].state | float < (inputs.lux_threshold | float))
+          )
+        ) == false
+      )
+  ) }}
 
 action:
   - service: homeassistant.turn_on
