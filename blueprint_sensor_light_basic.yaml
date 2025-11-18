@@ -24,6 +24,7 @@ blueprint:
 
     countdown_time:
       name: 'Tempo até desligar - ex: 60s, 3min, 15min'
+      default: "00:01:00"
       selector:
         duration:
 
