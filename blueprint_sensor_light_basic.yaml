@@ -11,7 +11,7 @@ blueprint:
             - binary_sensor
 
     target_lights:
-      name: Switches a serem ligados
+      name: Switches a serem acionados
       selector:
         target:
           entity:
