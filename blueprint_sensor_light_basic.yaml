@@ -1,8 +1,8 @@
 blueprint:
   name: "Sensor lights based on mmwave sensors with extra conditions"
-  description: "Acende luzes ao detectar presença e mantém acesas, reiniciando um timer de desligamento a cada nova detecção, ignorando o estado 'clear' imediato do sensor."
+  description: "Aciona luzes ao detectar presença e as mantém acesas, reiniciando um timer de desligamento a cada nova detecção, ignorando o estado 'clear' imediato do sensor."
   domain: automation
-  source_url: https://github.com/seu-usuario/homeassistant-blueprints # Troque pelo seu repositório, se for publicar.
+  source_url: https://github.com/jaullmann/ha_blueprint_sensor_lights/edit/main/blueprint_sensor_light_basic.yaml
   input:
     # 1. SENSOR DE PRESENÇA (OBRIGATÓRIO)
     mmwave_sensor:
@@ -121,26 +121,31 @@ condition:
   # 1. CONDIÇÃO DE LUMINOSIDADE (SE O SENSOR FOR FORNECIDO)
   - condition: template
     value_template: >
-      {% if is_state('!input lux_sensor', 'unavailable') or is_state('!input lux_sensor', 'unknown') or !input lux_sensor %}
-        true # Se o sensor não for configurado ou estiver indisponível, a condição é verdadeira.
+      {% set lux_id = iif(is_string(lux_sensor), lux_sensor, lux_sensor[0]) %}
+      {% if lux_id == "" or is_state(lux_id, 'unavailable') or is_state(lux_id, 'unknown') %}
+        true
       {% else %}
-        {{ states('!input lux_sensor') | float(0) <= (1 * !input max_lux_value) }}
+        {{ states(lux_id) | float(0) <= max_lux_value | float(100) }}
       {% endif %}
 
-  # 2. CONDIÇÃO DE HORÁRIO
+  # 2. CONDIÇÃO DE HORÁRIO (Corrigida a sintaxe !input para usar diretamente no topo)
   - condition: time
     after: !input time_after
     before: !input time_before
     
-  # 3. CONDIÇÃO DE DIAS DA SEMANA
+  # 3. CONDIÇÃO DE DIAS DA SEMANA (Corrigida a sintaxe !input para usar diretamente no topo)
   - condition: time
     weekday: !input active_weekdays
 
   # 4. CONDIÇÃO DE CHAVE MESTRA (SE FOR FORNECIDA)
-  - condition: state
-    entity_id: !input enable_switch
-    state: "on"
-    alias: "Chave Mestra Ativada"
+  - condition: template
+    value_template: >
+      {% set enable_id = iif(is_string(enable_switch), enable_switch, enable_switch[0]) %}
+      {% if enable_id == "" %}
+        true
+      {% else %}
+        {{ is_state(enable_id, 'on') }}
+      {% endif %}
 
 # --- AÇÃO: LIGAR A LUZ E INICIAR/REINICIAR O TIMER ---
 action:
