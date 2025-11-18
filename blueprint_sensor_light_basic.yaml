@@ -1,6 +1,6 @@
 blueprint:
-  name: Sensor Light Basic
-  description: Aciona interruptores por sensor de presença, condicionado a limite de luminosidade (opcional), faixa de horários e dias da semana (opcionais).
+  name: Sensor Light Basic Debug
+  description: Versão debug para identificar problemas de ativação
   domain: automation
   input:
     presence_sensor:
@@ -93,8 +93,6 @@ trigger:
     for:
       seconds: !input countdown_time
 
-condition: []
-
 action:
   - choose:
       - conditions:
@@ -104,20 +102,12 @@ action:
           - condition: template
             value_template: >
               {% set days = allowed_days %}
-              {% if days == [] or days is none %}
-                true
-              {% else %}
-                {{ now().strftime('%a').lower() in days }}
-              {% endif %}
+              {{ (days == [] or days is none) or (now().strftime('%a').lower() in days) }}
           - condition: template
             value_template: >
               {% set start = start_time %}
               {% set end = end_time %}
-              {% if start == "" or end == "" %}
-                true
-              {% else %}
-                {{ now().strftime("%H:%M:%S") >= start and now().strftime("%H:%M:%S") <= end }}
-              {% endif %}
+              {{ (start == "" or end == "") or (now().strftime("%H:%M:%S") >= start and now().strftime("%H:%M:%S") <= end) }}
           - condition: template
             value_template: >
               {% if not only_if_dark %}
@@ -133,7 +123,19 @@ action:
         sequence:
           - service: switch.turn_on
             target: !input target_lights
+          - service: persistent_notification.create
+            data:
+              title: "Sensor Light - LIGADO"
+              message: >
+                Sensor: {{ states(presence_sensor) }}
+                Horário: {{ now().strftime('%H:%M:%S') }}
+                Dia: {{ now().strftime('%a') }}
 
     default:
       - service: switch.turn_off
         target: !input target_lights
+      - service: persistent_notification.create
+        data:
+          title: "Sensor Light - DESLIGADO"
+          message: >
+            Sensor desligou por {{ countdown_time }} segundos
