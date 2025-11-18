@@ -1,5 +1,5 @@
 blueprint:
-  name: 'Automação de iluminação baseada em sensores e timers'
+  name: 'Smart Presence Lights based on ambient luminance'
   description: >
     Liga a luz ao detectar presença ou acionamento manual e inicia um timer.
     Reinicia o timer a cada presença ou acionamento manual.
