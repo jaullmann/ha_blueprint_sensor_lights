@@ -91,7 +91,7 @@ action:
       entity_id: !input target_switch
 
   - delay: 
-    seconds: !input countdown_time
+    seconds: "{{ (inputs.countdown_time | int) }}"
 
   - service: homeassistant.turn_off
     target:
