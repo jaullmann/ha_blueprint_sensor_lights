@@ -1,6 +1,6 @@
 blueprint:
   name: Sensor Light Basic
-  description: Liga luzes com sensor de presença, condicionado a limite de luminosidade (opcional), faixa de horários e dias da semana (opcionais).
+  description: Aciona interruptores por sensor de presença, condicionado a limite de luminosidade (opcional), faixa de horários e dias da semana (opcionais).
   domain: automation
   input:
     presence_sensor:
