@@ -1,98 +1,151 @@
 blueprint:
-  name: 'Smart Presence Lights based on ambient luminance'
-  description: >
-    Liga a luz ao detectar presença ou acionamento manual e inicia um timer.
-    Reinicia o timer a cada presença ou acionamento manual.
-    Desliga automaticamente ao fim do tempo.
+  name: Sensor Light Basic
+  description: Liga luzes com sensor de presença, condicionado a limite de luminosidade (opcional), faixa de horários e dias da semana (opcionais).
   domain: automation
-
   input:
     presence_sensor:
-      name: Sensor de presença
+      name: Sensor de Presença
       selector:
         entity:
           domain:
             - binary_sensor
 
-    target_switch:
-      name: Luz / Interruptor
+    target_lights:
+      name: Switches a serem ligados
       selector:
-        entity:
-          domain:
-            - light
-            - switch
+        target:
+          entity:
+            domain: switch
 
     countdown_time:
-      name: Tempo em segundos para desligar
+      name: Tempo para desligar (segundos)
       default: 60
       selector:
         number:
-          min: 5
-          max: 1800
+          min: 1
+          max: 36000
           step: 5
-          unit_of_measurement: seconds
-          
+          mode: slider
 
     only_if_dark:
-      name: 'Opcional - Só ligar se estiver escuro'
+      name: Habilitar conforme limite de luminosidade?
       default: false
       selector:
         boolean: {}
 
     lux_sensor:
-      name: 'Opcional - Sensor de luminosidade'
-      default: null
+      name: Sensor de luminosidade (opcional)
+      default: ""
       selector:
         entity:
           domain: sensor
           device_class: illuminance
+      enabled: "{% if only_if_dark %}true{% else %}false{% endif %}"
 
-    lux_threshold:
-      name: 'Limite máximo de luminosidade (lx)'
-      description: Se o sensor medir menos que esse valor, o ambiente será considerado escuro
-      default: 15
+    lux_limit:
+      name: Limite máximo de lux para ativação (opcional)
+      default: 10
       selector:
         number:
-          min: 1
-          max: 200
-          unit_of_measurement: 1x
-          mode: slider
+          min: 0
+          max: 2000
+      enabled: "{% if only_if_dark %}true{% else %}false{% endif %}"
+
+    start_time:
+      name: Hora inicial (opcional)
+      description: Se vazio, funciona o dia todo.
+      default: ""
+      selector:
+        time: {}
+
+    end_time:
+      name: Hora final (opcional)
+      description: Se vazio, funciona o dia todo.
+      default: ""
+      selector:
+        time: {}
+
+    allowed_days:
+      name: Dias permitidos (opcional)
+      description: Se nenhuma opção for marcada, funcionará todos os dias.
+      default: []
+      selector:
+        select:
+          options:
+            - Monday
+            - Tuesday
+            - Wednesday
+            - Thursday
+            - Friday
+            - Saturday
+            - Sunday
+          multiple: true
 
 mode: restart
 
 trigger:
-  - id: presence
-    platform: state
+  - platform: state
     entity_id: !input presence_sensor
     to: "on"
 
-  - id: manual_on
-    platform: state
-    entity_id: !input target_switch
-    to: "on"
+  - platform: state
+    entity_id: !input presence_sensor
+    to: "off"
+    for:
+      seconds: !input countdown_time
 
-condition: >
-  {{ not (
-    trigger.id == 'presence'
-    and (iif(
-          !input only_if_dark,
-          false,
-          (
-            not (states[inputs.lux_sensor] is defined)
-            or (states[inputs.lux_sensor].state | float < (inputs.lux_threshold | float))
-          )
-        ) == false
-      )
-  ) }}
+condition: []
 
 action:
-  - service: homeassistant.turn_on
-    target:
-      entity_id: !input target_switch
+  - choose:
+      # ---------------------------
+      # SENSOR LIGOU
+      # ---------------------------
+      - conditions:
+          - condition: state
+            entity_id: !input presence_sensor
+            state: "on"
 
-  - delay: 
-    seconds: "{{ (inputs.countdown_time | int) }}"
+          # Dias da semana (opcional)
+          - condition: template
+            value_template: >
+              {% set days = iinput.allowed_days %}
+              {% if days == [] %}
+                true
+              {% else %}
+                {{ now().strftime('%A') in days }}
+              {% endif %}
 
-  - service: homeassistant.turn_off
-    target:
-      entity_id: !input target_switch
+          # Verificação de horário (opcional)
+          - condition: template
+            value_template: >
+              {% set start = iinput.start_time %}
+              {% set end = iinput.end_time %}
+              {% if start == "" or end == "" %}
+                true
+              {% else %}
+                {{ start < now().strftime('%H:%M:%S') < end }}
+              {% endif %}
+
+          # Verificação de lux (opcional)
+          - condition: template
+            value_template: >
+              {% if iinput.only_if_dark == false %}
+                true
+              {% else %}
+                {% if iinput.lux_sensor == "" %}
+                  true
+                {% else %}
+                  {{ states(iinput.lux_sensor) | float(0) <= (iinput.lux_limit | float) }}
+                {% endif %}
+              {% endif %}
+        sequence:
+          - service: switch.turn_on
+            target: !input target_lights
+
+    # ---------------------------
+    # SENSOR DESLIGOU
+    # ---------------------------
+    default:
+      - service: switch.turn_off
+        target: !input target_lights
