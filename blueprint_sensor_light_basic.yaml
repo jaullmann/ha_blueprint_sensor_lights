@@ -6,12 +6,12 @@ blueprint:
   input:
     # 1. SENSOR DE PRESENÇA (OBRIGATÓRIO)
     mmwave_sensor:
-      name: "Sensor(es) de Presença (mmWave)"
+      name: "Sensor(es) de Presença"
       description: "Entidade ou grupo de sensor(es) de presença (ex: binary_sensor.sensor_mmwave_occupancy)."
       selector:
         entity:
-          domain: binary_sensor
-          multiple: true
+          domain:
+            - binary_sensor
 
     # 2. ILUMINAÇÃO ALVO (OBRIGATÓRIO)
     light_target:
