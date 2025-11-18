@@ -1,5 +1,5 @@
 blueprint:
-  name: "Presença Estática (mmWave) com Timer para Iluminação"
+  name: "Sensor lights based on mmwave sensors with extra conditions"
   description: "Acende luzes ao detectar presença e mantém acesas, reiniciando um timer de desligamento a cada nova detecção, ignorando o estado 'clear' imediato do sensor."
   domain: automation
   source_url: https://github.com/seu-usuario/homeassistant-blueprints # Troque pelo seu repositório, se for publicar.
