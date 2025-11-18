@@ -1,5 +1,5 @@
 blueprint:
-  name: Luz com Timer baseado em presença ou acionamento manual
+  name: 'Luz com Timer baseado em presença ou acionamento manual'
   description: >
     Liga a luz ao detectar presença ou acionamento manual e inicia um timer.
     Reinicia o timer a cada presença ou acionamento manual.
@@ -23,18 +23,18 @@ blueprint:
             - switch
 
     countdown_time:
-      name: Tempo até desligar - ex: 60s, 3min, 15min
+      name: 'Tempo até desligar - ex: 60s, 3min, 15min'
       selector:
         duration:
 
     only_if_dark:
-      name: Opcional - Só ligar se estiver escuro
+      name: 'Opcional - Só ligar se estiver escuro'
       default: false
       selector:
         boolean: {}
 
     lux_sensor:
-      name: Opcional - Sensor de luminosidade
+      name: 'Opcional - Sensor de luminosidade'
       default: null
       selector:
         entity:
