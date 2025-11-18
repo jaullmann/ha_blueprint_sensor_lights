@@ -1,5 +1,5 @@
 blueprint:
-  name: 'Luz com Timer baseado em presença ou acionamento manual'
+  name: 'Automação de iluminação baseada em sensores e timer'
   description: >
     Liga a luz ao detectar presença ou acionamento manual e inicia um timer.
     Reinicia o timer a cada presença ou acionamento manual.
