@@ -40,7 +40,6 @@ blueprint:
         entity:
           domain: sensor
           device_class: illuminance
-      enabled: "{% if only_if_dark %}true{% else %}false{% endif %}"
 
     lux_limit:
       name: Limite máximo de lux para ativação (opcional)
@@ -49,7 +48,6 @@ blueprint:
         number:
           min: 0
           max: 2000
-      enabled: "{% if only_if_dark %}true{% else %}false{% endif %}"
 
     start_time:
       name: Hora inicial (opcional)
