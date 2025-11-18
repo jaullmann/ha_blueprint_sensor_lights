@@ -8,11 +8,11 @@ blueprint:
 
   input:
     presence_sensor:
-      name: Sensor de Presença
+      name: Sensor de presença
       selector:
         entity:
-          domain: binary_sensor
-          device_class: motion
+          domain:
+            - binary_sensor
 
     lux_sensor:
       name: Sensor de Luminosidade (opcional)
