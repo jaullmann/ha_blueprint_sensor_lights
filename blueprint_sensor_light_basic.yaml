@@ -72,13 +72,13 @@ blueprint:
       selector:
         select:
           options:
-            - Monday
-            - Tuesday
-            - Wednesday
-            - Thursday
-            - Friday
-            - Saturday
-            - Sunday
+            - seg
+            - ter
+            - qua
+            - qui
+            - sex
+            - sab
+            - dom
           multiple: true
 
 mode: restart
@@ -87,7 +87,6 @@ trigger:
   - platform: state
     entity_id: !input presence_sensor
     to: "on"
-
   - platform: state
     entity_id: !input presence_sensor
     to: "off"
@@ -98,54 +97,43 @@ condition: []
 
 action:
   - choose:
-      # ---------------------------
-      # SENSOR LIGOU
-      # ---------------------------
       - conditions:
           - condition: state
             entity_id: !input presence_sensor
             state: "on"
-
-          # Dias da semana (opcional)
           - condition: template
             value_template: >
-              {% set days = !input.allowed_days %}
-              {% if days == [] %}
+              {% set days = allowed_days %}
+              {% if days == [] or days is none %}
                 true
               {% else %}
-                {{ now().strftime('%A') in days }}
+                {{ now().strftime('%a').lower() in days }}
               {% endif %}
-
-          # Verificação de horário (opcional)
           - condition: template
             value_template: >
-              {% set start = !input.start_time %}
-              {% set end = !input.end_time %}
+              {% set start = start_time %}
+              {% set end = end_time %}
               {% if start == "" or end == "" %}
                 true
               {% else %}
-                {{ start < now().strftime('%H:%M:%S') < end }}
+                {{ now().strftime("%H:%M:%S") >= start and now().strftime("%H:%M:%S") <= end }}
               {% endif %}
-
-          # Verificação de lux (opcional)
           - condition: template
             value_template: >
-              {% if !input.only_if_dark == false %}
+              {% if not only_if_dark %}
                 true
               {% else %}
-                {% if !input.lux_sensor == "" %}
+                {% if lux_sensor == "" or not states(lux_sensor) %}
                   true
                 {% else %}
-                  {{ states(!input.lux_sensor) | float(0) <= (!input.lux_limit | float) }}
+                  {{ states(lux_sensor) | float(0) <= (lux_limit | float) }}
                 {% endif %}
               {% endif %}
+
         sequence:
           - service: switch.turn_on
             target: !input target_lights
 
-    # ---------------------------
-    # SENSOR DESLIGOU
-    # ---------------------------
     default:
       - service: switch.turn_off
         target: !input target_lights
