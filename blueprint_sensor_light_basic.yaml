@@ -1,5 +1,5 @@
 blueprint:
-  name: "Automação de Luzes com Sensor mmWave e outras condicionais"
+  name: "Automação de Luzes com Sensor mmWave e condições específicas"
   description: "Automação de interruptores baseada em sensores de presença mmWave com timer regressivo"
   domain: automation
   input:
@@ -115,7 +115,7 @@ variables:
   sabado: !input sabado
   domingo: !input domingo
   entidade_controle: !input entidade_controle
-  timer_entity: "timer.automacao_mmwave_{{ this.automation_id }}"
+  timer_entity: "timer.automacao_mmwave_{{ this.automation_id | replace('automation.', '') }}"
 
 trigger:
   - platform: state
@@ -185,23 +185,37 @@ action:
             then:
               - service: light.turn_on
                 target: !input dispositivos_luz
-                data:
-                  transition: 1
               - service: timer.start
                 data:
-                  entity_id: !input timer_entity
-                  duration: !input timer_segundos
-          # Se as luzes já estiverem ligadas, apenas reinicia o timer
+                  entity_id: "{{ timer_entity }}"
+                  duration: "{{ timer_segundos }}"
+          # Se as condições não forem atendidas mas as luzes já estiverem ligadas, apenas reinicia o timer
           - else:
+              - condition: template
+                value_template: >
+                  {% if dispositivos_luz is string %}
+                    {{ is_state(dispositivos_luz, 'on') }}
+                  {% else %}
+                    {{ dispositivos_luz | map('is_state', 'on') | select | list | length > 0 }}
+                  {% endif %}
               - service: timer.start
                 data:
-                  entity_id: !input timer_entity
-                  duration: !input timer_segundos
+                  entity_id: "{{ timer_entity }}"
+                  duration: "{{ timer_segundos }}"
                   
       - conditions:
           - "{{ trigger.platform == 'event' and trigger.event.data.entity_id == timer_entity }}"
         sequence:
           - service: light.turn_off
             target: !input dispositivos_luz
-            data:
-              transition: 1
+
+  # Ação para criar o timer se não existir
+  - if:
+      - condition: template
+        value_template: "{{ timer_entity not in states.timer }}"
+    then:
+      - service: timer.start
+        data:
+          entity_id: "{{ timer_entity }}"
+          duration: 1
+      - delay: "00:00:01"
