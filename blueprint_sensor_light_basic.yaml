@@ -57,37 +57,37 @@ blueprint:
         time:
     segunda:
       name: "Segunda-feira"
-      default: true
+      default: false
       selector:
         boolean:
     terca:
       name: "Terça-feira"
-      default: true
+      default: false
       selector:
         boolean:
     quarta:
       name: "Quarta-feira"
-      default: true
+      default: false
       selector:
         boolean:
     quinta:
       name: "Quinta-feira"
-      default: true
+      default: false
       selector:
         boolean:
     sexta:
       name: "Sexta-feira"
-      default: true
+      default: false
       selector:
         boolean:
     sabado:
       name: "Sábado"
-      default: true
+      default: false
       selector:
         boolean:
     domingo:
       name: "Domingo"
-      default: true
+      default: false
       selector:
         boolean:
     entidade_controle:
@@ -98,7 +98,6 @@ blueprint:
           domain: 
             - input_boolean
             - switch
-      required: false
 
 variables:
   sensor_presenca: !input sensor_presenca
