@@ -1,5 +1,5 @@
 blueprint:
-  name: "Sensor Lights based on mmWave and other conditions"
+  name: "Sensor Lights based on mmWave sensor, iluminance and time conditions"
   description: "Aciona luzes ao detectar presença (atributo 'presence') OU acionamento manual, e as mantém acesas, reiniciando um timer de desligamento a cada nova detecção."
   domain: automation
   source_url: https://github.com/jaullmann/ha_blueprint_sensor_lights/edit/main/blueprint_sensor_light_basic.yaml
@@ -111,11 +111,17 @@ trigger:
     alias: "Presença Detectada (Atributo)"
     
   # Trigger 2: Acionamento Manual da Luz
-  - platform: state
-    entity_id: !input light_target
-    from: "off"
-    to: "on"
-    alias: "Luz Acionada Manualmente"
+  - if:
+      - condition: template
+        value_template: '{{ input_target(''light_target'') | length > 0 }}'
+    then:
+      - platform: state
+        # Se for um target com múltiplas entidades, ele injeta corretamente.
+        # Se o Target estiver vazio, o 'if' acima evita que o HA chegue aqui.
+        entity_id: !input light_target
+        from: "off"
+        to: "on"
+        alias: "Luz Acionada Manualmente"
 
 
 # --- CONDIÇÕES DE FUNCIONAMENTO GERAL ---
