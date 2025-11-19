@@ -1,5 +1,5 @@
 blueprint:
-  name: "Automação de Luzes com Sensor mmWave"
+  name: "Automação de Luzes com Sensor mmWave e outras condições"
   description: "Automação de interruptores baseada em sensores de presença mmWave com timer regressivo"
   domain: automation
   input:
@@ -131,82 +131,78 @@ trigger:
 
 action:
   - choose:
-      - conditions: "{{ trigger.platform == 'state' }}"
+      - conditions:
+          - "{{ trigger.platform == 'state' }}"
         sequence:
-          # Verifica condições antes de ligar as luzes
-          - condition: template
-            value_template: >
-              {% set controle = entidade_controle %}
-              {% if controle %}
-                {{ is_state(controle, 'on') }}
-              {% else %}
-                true
-              {% endif %}
-          - condition: template
-            value_template: >
-              {% set hora_inicio_val = hora_inicio %}
-              {% set hora_fim_val = hora_fim %}
-              {% if not hora_inicio_val or not hora_fim_val %}
-                true
-              {% else %}
-                {% set now_time = now().time() %}
-                {% set start_time = strptime(hora_inicio_val, '%H:%M:%S').time() if hora_inicio_val is string else hora_inicio_val %}
-                {% set end_time = strptime(hora_fim_val, '%H:%M:%S').time() if hora_fim_val is string else hora_fim_val %}
-                {% if start_time <= end_time %}
-                  {{ now_time >= start_time and now_time <= end_time }}
-                {% else %}
-                  {{ now_time >= start_time or now_time <= end_time }}
-                {% endif %}
-              {% endif %}
-          - condition: template
-            value_template: >
-              {% set dias_selecionados = [segunda, terca, quarta, quinta, sexta, sabado, domingo] %}
-              {% set algum_dia_selecionado = dias_selecionados | select | list | length > 0 %}
-              {% if not algum_dia_selecionado %}
-                true
-              {% else %}
-                {% set dia_semana = now().weekday() %}
-                {% set dias_map = {0: segunda, 1: terca, 2: quarta, 3: quinta, 4: sexta, 5: sabado, 6: domingo} %}
-                {{ dias_map[dia_semana] }}
-              {% endif %}
-          - condition: template
-            value_template: >
-              {% if not usar_luminosidade %}
-                true
-              {% else %}
-                {% set sensor_state = state_attr(sensor_presenca, 'illuminance') %}
-                {% if sensor_state is not none and sensor_state | int <= luminosidade_maxima %}
-                  true
-                {% else %}
-                  false
-                {% endif %}
-              {% endif %}
-          sequence:
-            - service: light.turn_on
-              target: !input dispositivos_luz
-              data:
-                transition: 1
-            - service: timer.start
-              target:
-                entity_id: !input timer_entity
-              data:
-                duration: !input timer_segundos
-              
-      - conditions: "{{ trigger.platform == 'event' and trigger.event.data.entity_id == timer_entity }}"
+          # Verificar condições para ligar as luzes
+          - if:
+              - condition: template
+                value_template: >
+                  {% set controle = entidade_controle %}
+                  {% if controle %}
+                    {{ is_state(controle, 'on') }}
+                  {% else %}
+                    true
+                  {% endif %}
+              - condition: template
+                value_template: >
+                  {% set hora_inicio_val = hora_inicio %}
+                  {% set hora_fim_val = hora_fim %}
+                  {% if not hora_inicio_val or not hora_fim_val %}
+                    true
+                  {% else %}
+                    {% set now_time = now().time() %}
+                    {% set start_time = strptime(hora_inicio_val, '%H:%M:%S').time() if hora_inicio_val is string else hora_inicio_val %}
+                    {% set end_time = strptime(hora_fim_val, '%H:%M:%S').time() if hora_fim_val is string else hora_fim_val %}
+                    {% if start_time <= end_time %}
+                      {{ now_time >= start_time and now_time <= end_time }}
+                    {% else %}
+                      {{ now_time >= start_time or now_time <= end_time }}
+                    {% endif %}
+                  {% endif %}
+              - condition: template
+                value_template: >
+                  {% set dias_selecionados = [segunda, terca, quarta, quinta, sexta, sabado, domingo] %}
+                  {% set algum_dia_selecionado = dias_selecionados | select | list | length > 0 %}
+                  {% if not algum_dia_selecionado %}
+                    true
+                  {% else %}
+                    {% set dia_semana = now().weekday() %}
+                    {% set dias_map = {0: segunda, 1: terca, 2: quarta, 3: quinta, 4: sexta, 5: sabado, 6: domingo} %}
+                    {{ dias_map[dia_semana] }}
+                  {% endif %}
+              - condition: template
+                value_template: >
+                  {% if not usar_luminosidade %}
+                    true
+                  {% else %}
+                    {% set sensor_state = state_attr(sensor_presenca, 'illuminance') %}
+                    {% if sensor_state is not none and sensor_state | int <= luminosidade_maxima %}
+                      true
+                    {% else %}
+                      false
+                    {% endif %}
+                  {% endif %}
+            then:
+              - service: light.turn_on
+                target: !input dispositivos_luz
+                data:
+                  transition: 1
+              - service: timer.start
+                data:
+                  entity_id: !input timer_entity
+                  duration: !input timer_segundos
+          # Se as luzes já estiverem ligadas, apenas reinicia o timer
+          - else:
+              - service: timer.start
+                data:
+                  entity_id: !input timer_entity
+                  duration: !input timer_segundos
+                  
+      - conditions:
+          - "{{ trigger.platform == 'event' and trigger.event.data.entity_id == timer_entity }}"
         sequence:
           - service: light.turn_off
             target: !input dispositivos_luz
             data:
               transition: 1
-
-  # Reinicia o timer quando há nova detecção enquanto as luzes estão ligadas
-  - choose:
-      - conditions:
-          - "{{ trigger.platform == 'state' }}"
-          - "{{ is_state(dispositivos_luz[0], 'on') if dispositivos_luz is iterable else is_state(dispositivos_luz, 'on') }}"
-        sequence:
-          - service: timer.start
-            target:
-              entity_id: !input timer_entity
-            data:
-              duration: !input timer_segundos
