@@ -1,5 +1,5 @@
 blueprint:
-  name: "Automação de Luzes com Sensor mmWave"
+  name: "Automação de Luzes com Sensor mmWave e outras condicionais"
   description: "Automação de interruptores baseada em sensores de presença mmWave com timer regressivo"
   domain: automation
   input:
