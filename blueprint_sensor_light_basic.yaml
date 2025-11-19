@@ -1,21 +1,20 @@
 blueprint:
-  name: "Sensor Lights based on mmWave sensor, iluminance and time conditions"
-  description: "Aciona luzes ao detectar presença (atributo 'presence') OU acionamento manual, e as mantém acesas, reiniciando um timer de desligamento a cada nova detecção."
+  name: "Sensor de Presença (mmWave Z2M) com Timer para Iluminação"
+  description: "Acende luzes (se necessário) ao detectar presença (atributo 'presence') OU acionamento manual, e as mantém acesas, reiniciando um timer de desligamento a cada nova detecção."
   domain: automation
-  source_url: https://github.com/jaullmann/ha_blueprint_sensor_lights/edit/main/blueprint_sensor_light_basic.yaml
+  
   input:
-    # 1. SENSOR PRINCIPAL (OBRIGATÓRIO) - ENTIDADE QUE CONTÉM OS ATRIBUTOS
-    mmwave_sensor_main: # Nome do input alterado
+    # 1. SENSOR PRINCIPAL (OBRIGATÓRIO)
+    mmwave_sensor_main:
       name: "Entidade Principal do Sensor (Z2M)"
-      description: "Entidade principal do sensor mmWave (ex: sensor.sensor_corredor) que contém os atributos 'presence' e 'illuminance'."
+      description: "Entidade principal do sensor mmWave (ex: sensor.sensor_corredor) que contém os atributos 'presence' e 'illuminance'. Aceita múltiplas entidades."
       selector:
         entity:
-          # Permite entidades que não são binary_sensor, pois o dado é lido do atributo
           domain: 
-            - binary_sensor 
-          multiple: true
-
-    # 2. ILUMINAÇÃO ALVO (OBRIGATÓRIO)
+            - binary_sensor
+          multiple: true # Sem filtro de domínio
+          
+    # 2. ILUMINAÇÃO ALVO (OBRIGATÓRIO) - Mantido 'target' para os serviços de light.turn_on/off
     light_target:
       name: "Iluminação Alvo"
       description: "Entidade ou grupo de luzes/interruptores que serão controlados."
@@ -53,14 +52,12 @@ blueprint:
     # 5. CONDIÇÃO DE HORÁRIO ATIVO (OPCIONAL)
     time_after:
       name: "Horário de Início (Opcional)"
-      description: "A automação só funcionará APÓS este horário."
       default: "00:00:00"
       selector:
         time:
     
     time_before:
       name: "Horário de Fim (Opcional)"
-      description: "A automação só funcionará ANTES deste horário."
       default: "23:59:59"
       selector:
         time:
@@ -68,7 +65,6 @@ blueprint:
     # 6. CONDIÇÃO DE DIAS DA SEMANA ATIVOS (OPCIONAL)
     active_weekdays:
       name: "Dias da Semana Ativos (Opcional)"
-      description: "Selecione os dias da semana em que a automação deve estar ativa."
       default: [mon, tue, wed, thu, fri, sat, sun]
       selector:
         select:
@@ -92,7 +88,7 @@ blueprint:
     # 7. CONDIÇÃO BOLEANA DE ATIVAÇÃO/DESATIVAÇÃO GERAL (OPCIONAL)
     enable_switch:
       name: "Chave Mestra de Ativação (Opcional)"
-      description: "Entidade booleana que deve estar LIGADA para a automação funcionar."
+      description: "Entidade booleana (ex: switch, input_boolean) que deve estar LIGADA para a automação funcionar. Deixe vazio para ignorar."
       default: ""
       selector:
         entity:
@@ -103,30 +99,23 @@ mode: restart
 
 # --- TRIGGERS: QUANDO A PRESENÇA OU A LUZ É ATIVADA ---
 trigger:
-  # Trigger 1: Detecção de Presença (Lendo o atributo 'presence' = true)
+  # Trigger 1: Detecção de Presença (Lógica simplificada para checar múltiplos sensores)
   - platform: template
-    value_template: >
-      {% set sensor_id = iif(is_list(input('mmwave_sensor_main')), input('mmwave_sensor_main')[0], input('mmwave_sensor_main')) %}
-      {{ state_attr(sensor_id, 'presence') == true }}
+    value_template: "{{ expand(mmwave_sensor_main) | selectattr('attributes.presence', 'eq', true) | list | count > 0 }}"
     alias: "Presença Detectada (Atributo)"
     
   # Trigger 2: Acionamento Manual da Luz
-  - if:
-      - condition: template
-        value_template: '{{ input_target(''light_target'') | length > 0 }}'
-    then:
-      - platform: state
-        # Se for um target com múltiplas entidades, ele injeta corretamente.
-        # Se o Target estiver vazio, o 'if' acima evita que o HA chegue aqui.
-        entity_id: !input light_target
-        from: "off"
-        to: "on"
-        alias: "Luz Acionada Manualmente"
+  - platform: state
+    # CORREÇÃO: Usando template em uma única linha para injetar IDs do 'target' sem quebrar o YAML
+    entity_id: "{{ expand(light_target) | map(attribute='entity_id') | list }}"
+    from: "off"
+    to: "on"
+    alias: "Luz Acionada Manualmente"
 
 
 # --- CONDIÇÕES DE FUNCIONAMENTO GERAL ---
 condition:
-  # 1. CONDIÇÃO DE LUMINOSIDADE (Lendo o atributo 'illuminance')
+  # 1. CONDIÇÃO DE LUMINOSIDADE (Usa o primeiro sensor para checar Lux)
   - condition: template
     value_template: >
       {% set sensor_id = iif(is_list(input('mmwave_sensor_main')), input('mmwave_sensor_main')[0], input('mmwave_sensor_main')) %}
@@ -166,9 +155,8 @@ action:
 
   # 3. VERIFICA NOVAMENTE A PRESENÇA NO ATRIBUTO ANTES DE DESLIGAR
   - condition: template
-    value_template: >
-      {% set sensor_id = iif(is_list(input('mmwave_sensor_main')), input('mmwave_sensor_main')[0], input('mmwave_sensor_main')) %}
-      {{ state_attr(sensor_id, 'presence') == false }}
+    # Se a contagem de sensores com 'presence: true' for zero (0), a condição é satisfeita e a luz desliga.
+    value_template: "{{ expand(mmwave_sensor_main) | selectattr('attributes.presence', 'eq', true) | list | count == 0 }}"
     alias: "Presença 'false' no final do timer"
 
   # 4. DESLIGA A LUZ
