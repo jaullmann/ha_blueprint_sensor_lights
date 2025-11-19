@@ -57,37 +57,37 @@ blueprint:
         time:
     segunda:
       name: "Segunda-feira"
-      default: false
+      default: true
       selector:
         boolean:
     terca:
       name: "Terça-feira"
-      default: false
+      default: true
       selector:
         boolean:
     quarta:
       name: "Quarta-feira"
-      default: false
+      default: true
       selector:
         boolean:
     quinta:
       name: "Quinta-feira"
-      default: false
+      default: true
       selector:
         boolean:
     sexta:
       name: "Sexta-feira"
-      default: false
+      default: true
       selector:
         boolean:
     sabado:
       name: "Sábado"
-      default: false
+      default: true
       selector:
         boolean:
     domingo:
       name: "Domingo"
-      default: false
+      default: true
       selector:
         boolean:
     entidade_controle:
