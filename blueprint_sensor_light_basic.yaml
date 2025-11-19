@@ -12,7 +12,7 @@ blueprint:
         entity:
           # Permite entidades que não são binary_sensor, pois o dado é lido do atributo
           domain: 
-            - binary sensor 
+            - binary_sensor 
           multiple: true
 
     # 2. ILUMINAÇÃO ALVO (OBRIGATÓRIO)
