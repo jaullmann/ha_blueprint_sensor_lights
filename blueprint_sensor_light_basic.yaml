@@ -1,17 +1,18 @@
 blueprint:
-  name: "Sensor lights based on mmwave sensors with extra conditions"
-  description: "Aciona luzes ao detectar presença e as mantém acesas, reiniciando um timer de desligamento a cada nova detecção, ignorando o estado 'clear' imediato do sensor."
+  name: "Presença Estática (mmWave) com Timer para Iluminação"
+  description: "Acende luzes (se necessário) ao detectar presença OU acionamento manual, e as mantém acesas, reiniciando um timer de desligamento a cada nova detecção de presença ou ação."
   domain: automation
-  source_url: https://github.com/jaullmann/ha_blueprint_sensor_lights/edit/main/blueprint_sensor_light_basic.yaml
+  source_url: https://github.com/seu-usuario/homeassistant-blueprints # Troque pelo seu repositório, se for publicar.
   input:
     # 1. SENSOR DE PRESENÇA (OBRIGATÓRIO)
     mmwave_sensor:
-      name: "Sensor(es) de Presença"
+      name: "Sensor(es) de Presença (mmWave)"
       description: "Entidade ou grupo de sensor(es) de presença (ex: binary_sensor.sensor_mmwave_occupancy)."
       selector:
         entity:
-          domain:
+          domain: 
             - binary_sensor
+          multiple: true
 
     # 2. ILUMINAÇÃO ALVO (OBRIGATÓRIO)
     light_target:
@@ -107,62 +108,73 @@ blueprint:
           domain: [input_boolean, switch]
           multiple: false
 
-mode: restart # Garante que cada trigger de 'on' interrompa e reinicie o ciclo
+mode: restart
 
-# --- TRIGGER: QUANDO O SENSOR DETECTA PRESENÇA ---
+# --- TRIGGERS: QUANDO A PRESENÇA OU A LUZ É ATIVADA ---
 trigger:
+  # Trigger 1: Detecção de Presença
   - platform: state
     entity_id: !input mmwave_sensor
     from: "off"
     to: "on"
+    alias: "Presença Detectada"
+
+  # Trigger 2: Acionamento Manual da Luz (NOVO)
+  - platform: state
+    entity_id: !input light_target
+    from: "off"
+    to: "on"
+    alias: "Luz Acionada Manualmente"
+
 
 # --- CONDIÇÕES DE FUNCIONAMENTO GERAL ---
 condition:
-  # 1. CONDIÇÃO DE LUMINOSIDADE (SE O SENSOR FOR FORNECIDO)
+  # 1. CONDIÇÃO DE LUMINOSIDADE (Sintaxe Jinja corrigida para evitar o erro '!')
   - condition: template
     value_template: >
-      {% set lux_id = iif(is_string(lux_sensor), lux_sensor, lux_sensor[0]) %}
+      {% set lux_id = lux_sensor %}
       {% if lux_id == "" or is_state(lux_id, 'unavailable') or is_state(lux_id, 'unknown') %}
-        true
+        true # Se o sensor não for configurado ou estiver indisponível, a condição é verdadeira.
       {% else %}
         {{ states(lux_id) | float(0) <= max_lux_value | float(100) }}
       {% endif %}
 
-  # 2. CONDIÇÃO DE HORÁRIO (Corrigida a sintaxe !input para usar diretamente no topo)
+  # 2. CONDIÇÃO DE HORÁRIO
   - condition: time
     after: !input time_after
     before: !input time_before
     
-  # 3. CONDIÇÃO DE DIAS DA SEMANA (Corrigida a sintaxe !input para usar diretamente no topo)
+  # 3. CONDIÇÃO DE DIAS DA SEMANA
   - condition: time
     weekday: !input active_weekdays
 
-  # 4. CONDIÇÃO DE CHAVE MESTRA (SE FOR FORNECIDA)
+  # 4. CONDIÇÃO DE CHAVE MESTRA (Sintaxe Jinja corrigida para evitar o erro '!')
   - condition: template
     value_template: >
-      {% set enable_id = iif(is_string(enable_switch), enable_switch, enable_switch[0]) %}
+      {% set enable_id = enable_switch %}
       {% if enable_id == "" %}
-        true
+        true # Se a chave não for configurada, a condição é verdadeira.
       {% else %}
         {{ is_state(enable_id, 'on') }}
       {% endif %}
+    alias: "Chave Mestra Ativada"
 
 # --- AÇÃO: LIGAR A LUZ E INICIAR/REINICIAR O TIMER ---
 action:
-  # 1. LIGA A LUZ
+  # 1. LIGA A LUZ (Será executado, mas é inócuo se a luz já estiver ligada pelo acionamento manual)
   - service: "light.turn_on"
     target: !input light_target
     alias: "Ligar a Luz"
 
-  # 2. ESPERA O TEMPO DE DELAY (O TIMER É REINICIADO SE HOUVER NOVO TRIGGER)
+  # 2. ESPERA O TEMPO DE DELAY (O Timer é REINICIADO se houver um novo trigger, graças ao 'mode: restart')
   - delay: !input off_delay
     alias: "Aguardar Timer de Desligamento"
 
-  # 3. VERIFICA NOVAMENTE O SENSOR ANTES DE DESLIGAR
+  # 3. VERIFICA NOVAMENTE A PRESENÇA ANTES DE DESLIGAR
   - condition: state
     entity_id: !input mmwave_sensor
     state: "off"
-    alias: "Apenas desligar se a presença estiver 'off' APÓS o delay"
+    alias: "Presença 'off' no final do timer"
 
   # 4. DESLIGA A LUZ
   - service: "light.turn_off"
