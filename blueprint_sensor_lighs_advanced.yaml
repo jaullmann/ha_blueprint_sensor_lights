@@ -209,7 +209,7 @@ action:
                           - variables:
                               light_entity: "{{ lights[repeat.index - 1] }}"
                               boolean_entity: "{{ booleans[repeat.index - 1] }}"
-                          choose:
+                          - choose:
                               - alias: "Luz está ON -> Setar booleano para ON"
                                 conditions:
                                   - condition: state
@@ -256,7 +256,7 @@ action:
                           - variables:
                               light_entity: "{{ lights[repeat.index - 1] }}"
                               boolean_entity: "{{ booleans[repeat.index - 1] }}"
-                          choose:
+                          - choose:
                               - alias: "Se o booleano de estado estiver ON, desligar a luz"
                                 conditions:
                                   - condition: state
