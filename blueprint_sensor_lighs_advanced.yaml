@@ -1,5 +1,5 @@
 blueprint:
-  name: Automação Inteligente de Iluminação com Presença e Timer
+  name: Automação Inteligente de Iluminação com Sensor de Presença e Timer
   description: Ativa interruptores/luzes com base em sensor de presença mmWave ou ativação manual, e desliga automaticamente após um tempo configurável. Salva o último estado das luzes para reativação.
   domain: automation
   input:
@@ -32,8 +32,7 @@ blueprint:
       description: Sensor de presença que ativará a automação (trigger).
       selector:
         entity:
-          domain: binary_sensor
-          device_class: [motion, presence]
+          domain: [binary_sensor, input_boolean]
     countdown_timer:
       name: Entidade Timer (Obrigatório)
       description: Entidade 'timer' do Home Assistant usada para o contador regressivo de desligamento.
