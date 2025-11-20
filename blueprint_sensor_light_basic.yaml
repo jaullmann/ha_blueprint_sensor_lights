@@ -9,7 +9,7 @@ blueprint:
       selector:
         entity:
           domain: binary_sensor
-          device_class: presence
+          device_class: motion
     dispositivos_luz:
       name: "Dispositivos de Iluminação"
       description: "Interruptores ou luzes a serem controlados"
