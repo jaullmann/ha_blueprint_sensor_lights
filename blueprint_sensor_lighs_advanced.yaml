@@ -178,7 +178,7 @@ action:
                 {{ expand_entity_id(lights) | map(attribute='state') | unique | list == ['off'] }}
             
             # Lógica de Ativação Padrão (Se todas as luzes estiverem OFF E houver luzes padrão configuradas)
-            - choose:
+            choose:
                 - conditions:
                     - condition: template
                       value_template: "{{ all_off and input_default_lights | length > 0 }}"
@@ -198,7 +198,7 @@ action:
                         entity_id: !input target_lights
             
             # Lógica de Salvamento de Estado (Apenas se state_booleans for fornecido)
-            - choose:
+            choose:
                 - conditions:
                     - condition: template
                       value_template: "{{ booleans | length > 0 }}"
