@@ -1,150 +1,291 @@
 blueprint:
-  name: Sensor Light Basic
-  description: Liga luzes com sensor de presença, condicionado a limite de luminosidade opcional, faixa de horários dias opcionais.
+  name: Automação Inteligente de Iluminação com Presença e Timer
+  description: Ativa interruptores/luzes com base em sensor de presença mmWave ou ativação manual, e desliga automaticamente após um tempo configurável. Salva o último estado das luzes para reativação.
   domain: automation
   input:
-    presence_sensor:
-      name: Sensor de Presença
-      selector:
-        entity:
-          domain:
-            - binary_sensor
-
     target_lights:
-      name: Switches a serem ligados
+      name: Interruptores/Luzes a Controlar (Obrigatório)
+      description: Entidades de luzes ou interruptores que serão controladas. Mínimo 1 entidade.
       selector:
         target:
           entity:
-            domain: switch
-
-    countdown_time:
-      name: Tempo para desligar (segundos)
-      default: 60
+            domain: [light, switch]
+      default: []
+    state_booleans:
+      name: Variáveis Auxiliares de Estado (Opcional)
+      description: Variáveis booleanas auxiliares (input_boolean) para memorizar o último estado (ON/OFF) de CADA luz antes do desligamento automático. **A ordem deve ser a mesma de 'Interruptores/Luzes a Controlar'.**
+      selector:
+        target:
+          entity:
+            domain: input_boolean
+      default: []
+    default_lights:
+      name: Luzes Padrão para Ativação (Opcional)
+      description: Luzes a serem ativadas se o usuário desligar todas as luzes manualmente antes de sair (todas as variáveis auxiliares forem FALSE).
+      selector:
+        target:
+          entity:
+            domain: [light, switch]
+      default: []
+    presence_sensor:
+      name: Sensor de Presença (mmWave) (Obrigatório)
+      description: Sensor de presença que ativará a automação (trigger).
+      selector:
+        entity:
+          domain: binary_sensor
+          device_class: [motion, presence]
+    countdown_timer:
+      name: Entidade Timer (Obrigatório)
+      description: Entidade 'timer' do Home Assistant usada para o contador regressivo de desligamento.
+      selector:
+        entity:
+          domain: timer
+    timer_duration:
+      name: Duração do Timer (segundos)
+      description: Tempo em segundos para o timer de desligamento automático.
+      default: 30
       selector:
         number:
           min: 1
-          max: 36000
+          max: 3600
+          unit_of_measurement: seconds
           mode: slider
-
-    only_if_dark:
-      name: Habilitar conforme limite de luminosidade?
-      default: false
+    active_days:
+      name: Dias da Semana Ativos (Opcional)
+      description: Dias da semana em que a automação estará ativa. Se vazio, atua em todos os dias.
       selector:
-        boolean: {}
-
-    lux_sensor:
-      name: Sensor de luminosidade (opcional)
+        select:
+          multiple: true
+          options:
+            - "Mon"
+            - "Tue"
+            - "Wed"
+            - "Thu"
+            - "Fri"
+            - "Sat"
+            - "Sun"
+      default: []
+    start_time:
+      name: Horário de Início (Opcional)
+      description: Horário em que a automação começa a funcionar.
+      default: "00:00:00"
+      selector:
+        time:
+    end_time:
+      name: Horário de Fim (Opcional)
+      description: Horário em que a automação para de funcionar.
+      default: "23:59:59"
+      selector:
+        time:
+    master_switch:
+      name: Chave Mestra de Condição (Opcional)
+      description: Entidade booleana de condição. A automação só funciona se esta entidade estiver ON.
+      selector:
+        entity:
+          domain: input_boolean
       default: ""
+    light_sensor:
+      name: Sensor de Luminosidade (Opcional)
+      description: Sensor de luminosidade (lux) para condicionar a ativação.
       selector:
         entity:
           domain: sensor
           device_class: illuminance
-      enabled: "{% if only_if_dark %}true{% else %}false{% endif %}"
-
-    lux_limit:
-      name: Limite máximo de lux para ativação (opcional)
-      default: 10
+      default: ""
+    max_lux:
+      name: Luminosidade Máxima (Lux)
+      description: Valor máximo de luminosidade (lux) para que a automação seja ativada.
+      default: 50
       selector:
         number:
-          min: 0
-          max: 2000
-      enabled: "{% if only_if_dark %}true{% else %}false{% endif %}"
-
-    start_time:
-      name: Hora inicial (opcional)
-      description: Se vazio, funciona o dia todo.
-      default: ""
-      selector:
-        time: {}
-
-    end_time:
-      name: Hora final (opcional)
-      description: Se vazio, funciona o dia todo.
-      default: ""
-      selector:
-        time: {}
-
-    allowed_days:
-      name: Dias permitidos (opcional)
-      description: Se nenhuma opção for marcada, funcionará todos os dias.
-      default: []
-      selector:
-        select:
-          options:
-            - Monday
-            - Tuesday
-            - Wednesday
-            - Thursday
-            - Friday
-            - Saturday
-            - Sunday
-          multiple: true
-
-mode: restart
+          min: 5
+          max: 200
+          step: 5
+          unit_of_measurement: lux
+          mode: slider
 
 trigger:
   - platform: state
     entity_id: !input presence_sensor
+    from: "off"
     to: "on"
-
+    id: "presence_on"
+    alias: "Presença Detectada"
   - platform: state
-    entity_id: !input presence_sensor
-    to: "off"
-    for:
-      seconds: !input countdown_time
-
-condition: []
+    entity_id: !input target_lights
+    from: "off"
+    to: "on"
+    id: "light_manual_on"
+    alias: "Luz Ativada Manualmente"
+  - platform: event
+    event_type: timer.finished
+    event_data:
+      entity_id: !input countdown_timer
+    id: "timer_finished"
+    alias: "Timer Expirado"
+  - platform: template
+    value_template: >
+      {% set lights = expand_entity_id(input_target_lights) %}
+      {% set all_off = lights | map(attribute='state') | unique | list == ['off'] %}
+      {% set timer_active = is_state(input_countdown_timer, 'active') %}
+      
+      {# Trigger quando TODAS as luzes estão OFF E o timer está ativo. Isso indica cancelamento manual. #}
+      {{ all_off and timer_active }}
+    id: "manual_cancel"
+    alias: "Cancelamento Manual (Todas as Luzes OFF)"
+    
+condition:
+  - condition: template
+    value_template: >
+      {% set days = iif(input_active_days | length > 0, input_active_days, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']) %}
+      {{ now().strftime('%a') in days }}
+    alias: "Condição: Dias da Semana"
+  - condition: time
+    after: !input start_time
+    before: !input end_time
+    alias: "Condição: Faixa de Horário"
+  - condition: template
+    value_template: >
+      {% if input_master_switch != "" %}
+        {{ is_state(input_master_switch, 'on') }}
+      {% else %}
+        true
+      {% endif %}
+    alias: "Condição: Chave Mestra (Opcional)"
+  - condition: template
+    value_template: >
+      {% if input_light_sensor != "" %}
+        {{ states(input_light_sensor) | float(0) < input_max_lux | float(0) }}
+      {% else %}
+        true
+      {% endif %}
+    alias: "Condição: Luminosidade Máxima (Opcional)"
 
 action:
   - choose:
-      # ---------------------------
-      # SENSOR LIGOU
-      # ---------------------------
-      - conditions:
-          - condition: state
-            entity_id: !input presence_sensor
-            state: "on"
-
-          # Dias da semana (opcional)
-          - condition: template
-            value_template: >
-              {% set days = iinput.allowed_days %}
-              {% if days == [] %}
-                true
-              {% else %}
-                {{ now().strftime('%A') in days }}
-              {% endif %}
-
-          # Verificação de horário (opcional)
-          - condition: template
-            value_template: >
-              {% set start = iinput.start_time %}
-              {% set end = iinput.end_time %}
-              {% if start == "" or end == "" %}
-                true
-              {% else %}
-                {{ start < now().strftime('%H:%M:%S') < end }}
-              {% endif %}
-
-          # Verificação de lux (opcional)
-          - condition: template
-            value_template: >
-              {% if iinput.only_if_dark == false %}
-                true
-              {% else %}
-                {% if iinput.lux_sensor == "" %}
-                  true
-                {% else %}
-                  {{ states(iinput.lux_sensor) | float(0) <= (iinput.lux_limit | float) }}
-                {% endif %}
-              {% endif %}
+      - alias: "Cenário 1: Ativação (Presença ou Manual ON)"
+        conditions:
+          - condition: trigger
+            id:
+              - "presence_on"
+              - "light_manual_on"
         sequence:
-          - service: switch.turn_on
-            target: !input target_lights
+          - alias: "1. Salvar estado atual das luzes e ligar luzes padrão se todas estiverem desligadas"
+            variables:
+              lights: !input target_lights
+              booleans: !input state_booleans
+              all_off: >
+                {{ expand_entity_id(lights) | map(attribute='state') | unique | list == ['off'] }}
+            
+            # Lógica de Ativação Padrão (Se todas as luzes estiverem OFF E houver luzes padrão configuradas)
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: "{{ all_off and input_default_lights | length > 0 }}"
+                  sequence:
+                    - service: light.turn_on
+                      target:
+                        entity_id: !input default_lights
+                    - service: light.turn_on
+                      target:
+                        entity_id: !input target_lights
+                - conditions:
+                    - condition: template
+                      value_template: "{{ all_off and input_default_lights | length == 0 }}"
+                  sequence:
+                    - service: light.turn_on
+                      target:
+                        entity_id: !input target_lights
+            
+            # Lógica de Salvamento de Estado (Apenas se state_booleans for fornecido)
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: "{{ booleans | length > 0 }}"
+                  sequence:
+                    - repeat:
+                        count: "{{ lights | length }}"
+                        sequence:
+                          - variables:
+                              light_entity: "{{ lights[repeat.index - 1] }}"
+                              boolean_entity: "{{ booleans[repeat.index - 1] }}"
+                          - choose:
+                              - alias: "Luz está ON -> Setar booleano para ON"
+                                conditions:
+                                  - condition: state
+                                    entity_id: "{{ light_entity }}"
+                                    state: "on"
+                                sequence:
+                                  - service: input_boolean.turn_on
+                                    target:
+                                      entity_id: "{{ boolean_entity }}"
+                              - alias: "Luz está OFF -> Setar booleano para OFF"
+                                conditions:
+                                  - condition: state
+                                    entity_id: "{{ light_entity }}"
+                                    state: "off"
+                                sequence:
+                                  - service: input_boolean.turn_off
+                                    target:
+                                      entity_id: "{{ boolean_entity }}"
+                          
+          - alias: "2. Iniciar/Reiniciar o Timer"
+            service: timer.start
+            target:
+              entity_id: !input countdown_timer
+            data:
+              duration: "{{ input_timer_duration }}"
 
-    # ---------------------------
-    # SENSOR DESLIGOU
-    # ---------------------------
-    default:
-      - service: switch.turn_off
-        target: !input target_lights
+      - alias: "Cenário 2: Timer Expirado"
+        conditions:
+          - condition: trigger
+            id: "timer_finished"
+        sequence:
+          - alias: "1. Desligar Luzes que estavam ON (baseado no estado salvo)"
+            variables:
+              lights: !input target_lights
+              booleans: !input state_booleans
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: "{{ booleans | length > 0 }}"
+                  sequence:
+                    - repeat:
+                        count: "{{ lights | length }}"
+                        sequence:
+                          - variables:
+                              light_entity: "{{ lights[repeat.index - 1] }}"
+                              boolean_entity: "{{ booleans[repeat.index - 1] }}"
+                          - choose:
+                              - alias: "Se o booleano de estado estiver ON, desligar a luz"
+                                conditions:
+                                  - condition: state
+                                    entity_id: "{{ boolean_entity }}"
+                                    state: "on"
+                                sequence:
+                                  - service: light.turn_off
+                                    target:
+                                      entity_id: "{{ light_entity }}"
+                              
+          - alias: "2. Resetar Variáveis Auxiliares de Estado (Se fornecidas)"
+            service: input_boolean.turn_off
+            target:
+              entity_id: !input state_booleans
+
+      - alias: "Cenário 3: Cancelamento Manual (Todas as Luzes OFF)"
+        conditions:
+          - condition: trigger
+            id: "manual_cancel"
+        sequence:
+          - alias: "1. Cancelar o Timer"
+            service: timer.cancel
+            target:
+              entity_id: !input countdown_timer
+              
+          - alias: "2. Resetar Variáveis Auxiliares de Estado (Se fornecidas)"
+            service: input_boolean.turn_off
+            target:
+              entity_id: !input state_booleans
+
+mode: restart
+max_exceeded: silent
